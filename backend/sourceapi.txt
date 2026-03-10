@@ -1,0 +1,11 @@
+1️⃣ Get Freesound API Key
+
+Go to: https://freesound.org/apiv2/apply/
+
+2️⃣ Create an application.
+
+mail: sirstee1989@cuvox.de
+pwd: Miracle@123
+
+3️⃣ Copy your API Key.
+zFJHswHd0bdYd6wBhSN9uEK9w6DA1VQy5bPESUiD
