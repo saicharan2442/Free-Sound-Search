@@ -10,14 +10,14 @@ export function Footer() {
       className="relative z-10 text-center py-10 pb-24"
     >
       <p className="text-muted-foreground text-sm">
-        Powered by{" "}
+        {" "}
         <a
-          href="https://freesound.org"
+          href="http://saicharansada.netlify.app/"
           target="_blank"
           rel="noopener noreferrer"
           className="text-primary hover:underline"
         >
-          Freesound API
+          --*--
         </a>
       </p>
       <p className="text-sm">
