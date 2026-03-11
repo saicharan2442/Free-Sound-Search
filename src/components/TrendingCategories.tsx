@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import { Cloud, Zap, TreePine, Monitor, Gamepad2 } from "lucide-react";
 
-const categories = [
+const defaultCategories = [
   { label: "Rain", icon: Cloud },
   { label: "Thunder", icon: Zap },
   { label: "Nature", icon: TreePine },
@@ -11,9 +11,14 @@ const categories = [
 
 interface Props {
   onSelect: (category: string) => void;
+  categories?: string[];
 }
 
-export function TrendingCategories({ onSelect }: Props) {
+export function TrendingCategories({ onSelect, categories: customCategories }: Props) {
+  const categories = customCategories 
+    ? customCategories.map(label => ({ label, icon: Cloud }))
+    : defaultCategories;
+
   return (
     <section className="relative z-10 px-4 py-8 max-w-4xl mx-auto">
       <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-widest mb-4 text-center">
@@ -39,3 +44,4 @@ export function TrendingCategories({ onSelect }: Props) {
     </section>
   );
 }
+

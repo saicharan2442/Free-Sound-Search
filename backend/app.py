@@ -3,11 +3,27 @@ from flask_cors import CORS
 import requests
 from io import BytesIO
 
+try:
+    from ytmusicapi import YTMusic
+    YTMUSIC_AVAILABLE = True
+except ImportError:
+    YTMUSIC_AVAILABLE = False
+
+try:
+    import yt_dlp
+    YTDLP_AVAILABLE = True
+except ImportError:
+    YTDLP_AVAILABLE = False
+
 app = Flask(__name__)
 CORS(app)
 
 # Your Freesound API Key
 API_KEY = "zFJHswHd0bdYd6wBhSN9uEK9w6DA1VQy5bPESUiD"
+
+# Initialize YTMusic if available
+if YTMUSIC_AVAILABLE:
+    ytmusic = YTMusic()
 
 # Freesound Search Endpoint
 BASE_URL = "https://freesound.org/apiv2/search/text/"
@@ -101,6 +117,133 @@ def download_sound():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route("/listen-music/search", methods=["GET"])
+def search_youtube_music():
+    """Search music from YouTube Music API"""
+    if not YTMUSIC_AVAILABLE:
+        return jsonify({"error": "YouTube Music API is not installed"}), 500
+    
+    query = request.args.get("q")
+    
+    if not query:
+        return jsonify({"error": "Query is required"}), 400
+    
+    try:
+        search_results = ytmusic.search(query, filter="songs", limit=80)
+        
+        results = []
+        for r in search_results:
+            result_item = {
+                "title": r.get("title", "Unknown"),
+                "artist": r.get("artists")[0]["name"] if r.get("artists") else "Unknown",
+                "duration": r.get("duration", 0),
+                "videoId": r.get("videoId", ""),
+                "id": r.get("videoId", "")
+            }
+            results.append(result_item)
+        
+        return jsonify(results), 200
+    
+    except Exception as e:
+        print(f"Error searching YouTube Music: {str(e)}")
+        return jsonify({"error": f"Search failed: {str(e)}"}), 500
+
+
+@app.route("/listen-music/audio", methods=["GET"])
+def get_audio_url():
+    """Get audio URL from YouTube video ID"""
+    if not YTDLP_AVAILABLE:
+        return jsonify({"error": "Audio extraction is not available"}), 500
+    
+    video_id = request.args.get("videoId")
+    
+    if not video_id:
+        return jsonify({"error": "videoId is required"}), 400
+    
+    try:
+        youtube_url = f"https://www.youtube.com/watch?v={video_id}"
+        
+        # Extract audio in a format that browsers can play
+        ydl_opts = {
+            'format': 'bestaudio',
+            'quiet': True,
+            'no_warnings': True,
+            'extract_flat': False,
+            'socket_timeout': 30,
+            'ignoreerrors': True,
+        }
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(youtube_url, download=False)
+            audio_url = info.get('url')
+            
+            if not audio_url:
+                return jsonify({"error": "Could not extract audio URL"}), 500
+            
+            return jsonify({
+                "audioUrl": audio_url,
+                "format": info.get('ext', 'unknown')
+            }), 200
+    
+    except Exception as e:
+        print(f"Error extracting audio: {str(e)}")
+        return jsonify({"error": f"Audio extraction failed: {str(e)}"}), 500
+
+
+@app.route("/listen-music/stream", methods=["GET"])
+def stream_audio():
+    """Stream audio from URL (proxy for CORS)"""
+    audio_url = request.args.get("url")
+    
+    if not audio_url:
+        return jsonify({"error": "URL is required"}), 400
+    
+    try:
+        # Request audio from the URL with proper headers
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept': '*/*',
+            'Origin': 'https://www.youtube.com',
+            'Referer': 'https://www.youtube.com/',
+        }
+        
+        response = requests.get(audio_url, headers=headers, stream=True, timeout=30)
+        response.raise_for_status()
+        
+        # Determine content type from response
+        content_type = response.headers.get('content-type', 'audio/mpeg')
+        
+        # If the content type isn't audio, set it to audio/mpeg
+        if not content_type.startswith('audio'):
+            content_type = 'audio/mpeg'
+        
+        # Stream the audio
+        def generate():
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    yield chunk
+        
+        response_headers = {
+            'Content-Type': content_type,
+            'Access-Control-Allow-Origin': '*',
+            'Accept-Ranges': 'bytes',
+            'Cache-Control': 'no-cache',
+        }
+        
+        # Get content length if available
+        content_length = response.headers.get('content-length')
+        if content_length:
+            response_headers['Content-Length'] = content_length
+        
+        return generate(), 200, response_headers
+    
+    except requests.RequestException as e:
+        print(f"Error fetching audio: {str(e)}")
+        return jsonify({"error": f"Failed to fetch audio: {str(e)}"}), 500
+    except Exception as e:
+        print(f"Error streaming audio: {str(e)}")
+        return jsonify({"error": f"Streaming failed: {str(e)}"}), 500
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)

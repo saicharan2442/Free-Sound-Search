@@ -2,19 +2,19 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Search } from "lucide-react";
 
-interface HeroSectionProps {
+interface MusicHeroSectionProps {
   onSearch: (query: string) => void;
 }
 
 const placeholders = [
-  "Search sounds like rain, thunder, footsteps…",
-  "Try: birds chirping at dawn",
-  "Try: sci-fi laser beam",
-  "Try: ocean waves crashing",
-  "Try: city traffic ambience",
+  "Search songs like Blinding Lights, Levitating…",
+  "Try: Taylor Swift",
+  "Try: The Weeknd",
+  "Try: Ariana Grande",
+  "Try: BTS",
 ];
 
-export function HeroSection({ onSearch }: HeroSectionProps) {
+export function MusicHeroSection({ onSearch }: MusicHeroSectionProps) {
   const [query, setQuery] = useState("");
   const [placeholderIdx, setPlaceholderIdx] = useState(0);
 
@@ -43,12 +43,12 @@ export function HeroSection({ onSearch }: HeroSectionProps) {
         className="relative z-10 text-center"
       >
         <h1 className="text-5xl md:text-7xl font-bold tracking-tight mb-4">
-          <span className="text-gradient">FREE SOUND</span>
+          <span className="text-gradient">LISTEN</span>
           <br />
-          <span className="text-foreground">SEARCH</span>
+          <span className="text-foreground">MUSIC</span>
         </h1>
         <p className="text-muted-foreground text-lg md:text-xl mb-10 max-w-md mx-auto">
-          Discover and download sounds instantly.
+          Search and play your favorite songs from YouTube Music.
         </p>
       </motion.div>
 
