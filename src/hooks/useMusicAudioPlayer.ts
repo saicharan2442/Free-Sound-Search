@@ -8,12 +8,13 @@ export function useMusicAudioPlayer() {
   const [isPlaying, setIsPlaying] = useState(false);
 
   const play = useCallback((videoId: string, title: string, artist: string, audioUrl: string) => {
-    if (currentMusicId === videoId && isPlaying) {
-      // Pause if clicking same song
-      setIsPlaying(false);
+    // If it's the same song, toggle play/pause
+    if (currentMusicId === videoId) {
+      setIsPlaying(!isPlaying);
       return;
     }
 
+    // Otherwise, play the new song
     setCurrentMusicId(videoId);
     setCurrentTitle(title);
     setCurrentArtist(artist);

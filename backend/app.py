@@ -245,5 +245,60 @@ def stream_audio():
         print(f"Error streaming audio: {str(e)}")
         return jsonify({"error": f"Streaming failed: {str(e)}"}), 500
 
+
+@app.route("/listen-music/music-info", methods=["GET"])
+def get_music_info():
+    """Get music metadata from YouTube video ID"""
+    if not YTDLP_AVAILABLE:
+        return jsonify({"error": "Audio extraction is not available"}), 500
+    
+    video_id = request.args.get("videoId")
+    
+    if not video_id:
+        return jsonify({"error": "videoId is required"}), 400
+    
+    # Validate video ID format (11 characters for YouTube)
+    if not isinstance(video_id, str) or len(video_id) != 11:
+        return jsonify({"error": f"Invalid video ID format. Expected 11 characters, got {len(video_id)}"}), 400
+    
+    try:
+        youtube_url = f"https://www.youtube.com/watch?v={video_id}"
+        
+        # Extract metadata using yt_dlp
+        ydl_opts = {
+            'quiet': True,
+            'no_warnings': True,
+            'extract_flat': False,
+            'socket_timeout': 30,
+        }
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(youtube_url, download=False)
+            
+            title = info.get('title', 'Unknown')
+            artist = info.get('uploader', 'Unknown')
+            duration = info.get('duration', 0)
+            
+            return jsonify({
+                "title": title,
+                "artist": artist,
+                "duration": duration,
+                "videoId": video_id
+            }), 200
+    
+    except yt_dlp.utils.DownloadError as e:
+        error_msg = str(e)
+        # Check for common errors
+        if "unavailable" in error_msg.lower() or "not available" in error_msg.lower():
+            return jsonify({"error": "Video is unavailable. This video may be private, deleted, or region-blocked."}), 404
+        elif "age restricted" in error_msg.lower():
+            return jsonify({"error": "Video is age-restricted and cannot be played."}), 403
+        else:
+            return jsonify({"error": f"Failed to get video info: {error_msg}"}), 400
+    
+    except Exception as e:
+        print(f"Error getting music info: {str(e)}")
+        return jsonify({"error": "Failed to get music info. Please try a valid YouTube URL."}), 500
+
 if __name__ == "__main__":
     app.run(debug=True, port=5000)

@@ -1,16 +1,18 @@
 import { useRef, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Play, Pause, X, Volume2 } from "lucide-react";
+import { Play, Pause, X, Volume2, Download } from "lucide-react";
 import { WaveformBars } from "./WaveformBars";
 
 interface AudioPlayerProps {
   audioUrl: string | null;
   title: string | null;
   artist: string | null;
+  isPlaying?: boolean;
   onClose: () => void;
+  onPlayPauseChange?: (isPlaying: boolean) => void;
 }
 
-export function AudioPlayer({ audioUrl, title, artist, onClose }: AudioPlayerProps) {
+export function AudioPlayer({ audioUrl, title, artist, isPlaying: externalIsPlaying = false, onClose, onPlayPauseChange }: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -85,31 +87,56 @@ export function AudioPlayer({ audioUrl, title, artist, onClose }: AudioPlayerPro
 
   useEffect(() => {
     const audio = audioRef.current;
-    if (!audio) return;
+    if (!audio || !audioUrl) return;
 
     const updateTime = () => setCurrentTime(audio.currentTime);
-    const updateDuration = () => setDuration(audio.duration || 0);
-    const handleEnded = () => setIsPlaying(false);
+    const updateDuration = () => setDuration(isFinite(audio.duration) ? audio.duration : 0);
+    const handleEnded = () => {
+      setIsPlaying(false);
+      onPlayPauseChange?.(false);
+    };
 
     audio.addEventListener("timeupdate", updateTime);
     audio.addEventListener("loadedmetadata", updateDuration);
     audio.addEventListener("ended", handleEnded);
+
+    // Ensure we initialize duration if metadata already loaded
+    if (!isNaN(audio.duration) && isFinite(audio.duration) && audio.duration > 0) {
+      setDuration(audio.duration);
+    }
 
     return () => {
       audio.removeEventListener("timeupdate", updateTime);
       audio.removeEventListener("loadedmetadata", updateDuration);
       audio.removeEventListener("ended", handleEnded);
     };
-  }, []);
+  }, [audioUrl, onPlayPauseChange]);
+
+  // Sync external isPlaying state with audio element
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio || !audioUrl) return;
+
+    if (externalIsPlaying) {
+      audio.play().catch(err => console.error("Play error:", err));
+      setIsPlaying(true);
+    } else {
+      audio.pause();
+      setIsPlaying(false);
+    }
+  }, [externalIsPlaying, audioUrl]);
 
   const togglePlayPause = () => {
     if (audioRef.current) {
       if (isPlaying) {
         audioRef.current.pause();
+        setIsPlaying(false);
+        onPlayPauseChange?.(false);
       } else {
         audioRef.current.play();
+        setIsPlaying(true);
+        onPlayPauseChange?.(true);
       }
-      setIsPlaying(!isPlaying);
     }
   };
 
@@ -121,6 +148,17 @@ export function AudioPlayer({ audioUrl, title, artist, onClose }: AudioPlayerPro
     setIsPlaying(false);
     setError(null);
     onClose();
+  };
+
+  const handleDownload = () => {
+    if (!audioUrl) return;
+    const element = document.createElement("a");
+    element.setAttribute("href", audioUrl);
+    element.setAttribute("download", `${title || "audio"}-${artist || "unknown"}.mp3`);
+    element.style.display = "none";
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
   };
 
   const formatTime = (time: number) => {
@@ -242,25 +280,22 @@ export function AudioPlayer({ audioUrl, title, artist, onClose }: AudioPlayerPro
               <motion.button
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
+                onClick={handleDownload}
+                disabled={!audioUrl}
+                className="cursor-target w-8 h-8 rounded-full hover:bg-white/20 flex items-center justify-center text-gray-400 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Download audio"
+              >
+                <Download className="w-4 h-4" />
+              </motion.button>
+
+              <motion.button
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
                 onClick={handleClose}
                 className="cursor-target w-8 h-8 rounded-full hover:bg-white/20 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
               >
                 <X className="w-4 h-4" />
               </motion.button>
-            </div>
-          </div>
-
-          <div className="absolute top-0 left-0 w-full h-full pointer-events-none">
-            <div
-              className="relative w-full h-full flex items-center justify-center"
-              onMouseMove={handleMouseMove}
-              onMouseLeave={handleMouseLeave}
-            >
-              <div className="w-full h-full flex items-center justify-center">
-                <span className="text-xs font-mono text-gray-400">
-                  {hoverTime ? formatTime(hoverTime) : ""}
-                </span>
-              </div>
             </div>
           </div>
         </motion.div>

@@ -12,6 +12,7 @@ const placeholders = [
   "Try: The Weeknd",
   "Try: Ariana Grande",
   "Try: BTS",
+  "Or paste a YouTube link…",
 ];
 
 export function MusicHeroSection({ onSearch }: MusicHeroSectionProps) {

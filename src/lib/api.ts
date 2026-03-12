@@ -19,6 +19,31 @@ export interface MusicResult {
 // Configure your Flask backend URL here
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
+// Extract YouTube video ID from various URL formats
+export function extractYouTubeVideoId(input: string): string | null {
+  const trimmed = input.trim();
+
+  // Standard YouTube URL: https://www.youtube.com/watch?v=VIDEO_ID
+  let match = trimmed.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+  if (match) return match[1];
+
+  // YouTube short URL: https://youtu.be/VIDEO_ID
+  match = trimmed.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/);
+  if (match) return match[1];
+
+  // YouTube music URL: https://music.youtube.com/watch?v=VIDEO_ID
+  match = trimmed.match(/music\.youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/);
+  if (match) return match[1];
+
+  // Standalone video ID - must be EXACTLY 11 characters (YouTube standard)
+  // This prevents search queries from being treated as video IDs
+  if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  return null;
+}
+
 export async function searchSounds(query: string): Promise<SoundResult[]> {
   const response = await fetch(`${API_BASE_URL}/?q=${encodeURIComponent(query)}`);
   if (!response.ok) {
@@ -44,4 +69,13 @@ export async function getAudioUrl(videoId: string): Promise<string> {
   }
   const data = await response.json();
   return data.audioUrl;
+}
+
+// Get music metadata from video ID
+export async function getMusicInfo(videoId: string): Promise<Omit<MusicResult, "id">> {
+  const response = await fetch(`${API_BASE_URL}/listen-music/music-info?videoId=${encodeURIComponent(videoId)}`);
+  if (!response.ok) {
+    throw new Error(`Failed to get music info: ${response.statusText}`);
+  }
+  return response.json();
 }

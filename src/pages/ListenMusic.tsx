@@ -7,7 +7,7 @@ import { RecentSearches } from "@/components/RecentSearches";
 import { MusicCardFS } from "@/components/MusicCardFS";
 import { ErrorMessage } from "@/components/ErrorMessage";
 import { Footer } from "@/components/Footer";
-import { searchMusic, getAudioUrl } from "@/lib/api";
+import { searchMusic, getAudioUrl, extractYouTubeVideoId, getMusicInfo } from "@/lib/api";
 import { useMusicFavorites } from "@/hooks/useMusicFavorites";
 import { useRecentSearches } from "@/hooks/useRecentSearches";
 import { useMusicAudioPlayer } from "@/hooks/useMusicAudioPlayer";
@@ -30,6 +30,8 @@ export default function ListenMusic() {
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoadingAudio, setIsLoadingAudio] = useState(false);
+  const [urlError, setUrlError] = useState<string | null>(null);
+  const [directPlayTrack, setDirectPlayTrack] = useState<any>(null);
   
   const player = useMusicAudioPlayer();
   const { isFavorite, toggle: toggleFavorite } = useMusicFavorites();
@@ -38,35 +40,70 @@ export default function ListenMusic() {
   const { data: results, isLoading, error } = useQuery({
     queryKey: ["music", searchQuery],
     queryFn: () => searchMusic(searchQuery),
-    enabled: !!searchQuery,
+    enabled: !!searchQuery && !extractYouTubeVideoId(searchQuery),
   });
 
-  const handleSearch = useCallback(
-    (query: string) => {
-      setSearchQuery(query);
-      setCurrentPage(1);
-      addRecentSearch(query);
+  const handlePlay = useCallback(
+    async (videoId: string, title: string, artist: string) => {
+      // If clicking the same track, just toggle play/pause
+      if (player.currentMusicId === videoId) {
+        player.setIsPlaying(!player.isPlaying);
+        return;
+      }
+
+      // Different track - fetch audio URL and play
+      setIsLoadingAudio(true);
+      try {
+        const urlResponse = await getAudioUrl(videoId);
+        const proxyUrl = `${API_BASE_URL}/listen-music/stream?url=${encodeURIComponent(urlResponse)}`;
+        player.play(videoId, title, artist, proxyUrl);
+      } catch (err) {
+        console.error("Failed to get audio URL:", err);
+      } finally {
+        setIsLoadingAudio(false);
+      }
     },
-    [addRecentSearch]
+    [player]
   );
 
-  const handlePlay = async (videoId: string, title: string, artist: string) => {
-    if (player.currentMusicId === videoId && player.isPlaying) {
-      player.setIsPlaying(false);
-      return;
-    }
-
-    setIsLoadingAudio(true);
-    try {
-      const urlResponse = await getAudioUrl(videoId);
-      const proxyUrl = `${API_BASE_URL}/listen-music/stream?url=${encodeURIComponent(urlResponse)}`;
-      player.play(videoId, title, artist, proxyUrl);
-    } catch (err) {
-      console.error("Failed to get audio URL:", err);
-    } finally {
-      setIsLoadingAudio(false);
-    }
-  };
+  const handleSearch = useCallback(
+    async (query: string) => {
+      setUrlError(null);
+      const videoId = extractYouTubeVideoId(query);
+      
+      if (videoId) {
+        // User provided a YouTube URL or video ID
+        setIsLoadingAudio(true);
+        try {
+          // Get music info from video ID
+          const musicInfo = await getMusicInfo(videoId);
+          // Directly play the video
+          await handlePlay(videoId, musicInfo.title, musicInfo.artist);
+          // Store the track to display in cards
+          setDirectPlayTrack({
+            id: videoId,
+            videoId: videoId,
+            title: musicInfo.title,
+            artist: musicInfo.artist,
+            duration: musicInfo.duration,
+          });
+          setSearchQuery(""); // Clear search bar
+          addRecentSearch(query);
+        } catch (err) {
+          console.error("Failed to load from URL:", err);
+          setUrlError("Could not load the video. Please check the URL and try again.");
+          setIsLoadingAudio(false);
+        }
+      } else {
+        // Regular search
+        setSearchQuery(query);
+        setCurrentPage(1);
+        setDirectPlayTrack(null); // Clear direct play track on new search
+        addRecentSearch(query);
+      }
+    },
+    [addRecentSearch, handlePlay]
+  );
 
   const handleDownload = (music: any) => {
     // Create a download link for the music
@@ -101,6 +138,31 @@ export default function ListenMusic() {
         )}
 
         {error && <ErrorMessage message={(error as Error).message} />}
+
+        {urlError && <ErrorMessage message={urlError} />}
+
+        {directPlayTrack && (
+          <div className="mb-12">
+            <h2 className="text-2xl font-bold text-white mb-4">▶ Now Playing</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              <div className="animate-fade-in-up">
+                <MusicCardFS
+                  music={directPlayTrack}
+                  index={0}
+                  isPlaying={player.isPlaying}
+                  isCurrentMusic={player.currentMusicId === directPlayTrack.videoId}
+                  isFavorite={isFavorite(directPlayTrack.videoId)}
+                  onPlay={() => {
+                    if (isLoadingAudio) return;
+                    handlePlay(directPlayTrack.videoId, directPlayTrack.title, directPlayTrack.artist);
+                  }}
+                  onToggleFavorite={() => toggleFavorite(directPlayTrack.videoId)}
+                  onDownload={() => handleDownload(directPlayTrack)}
+                />
+              </div>
+            </div>
+          </div>
+        )}
 
         {results && results.length > 0 && (
           <>
@@ -199,7 +261,9 @@ export default function ListenMusic() {
         audioUrl={player.audioUrl}
         title={player.currentTitle}
         artist={player.currentArtist}
+        isPlaying={player.isPlaying}
         onClose={player.stop}
+        onPlayPauseChange={player.setIsPlaying}
       />
     </div>
   );
