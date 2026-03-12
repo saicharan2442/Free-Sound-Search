@@ -106,10 +106,14 @@ export default function ListenMusic() {
   );
 
   const handleDownload = (music: any) => {
-    // Create a download link for the music
+    const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+    const filename = `${music.title}-${music.artist}.mp3`.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const downloadUrl = `${API_BASE_URL}/listen-music/download?videoId=${encodeURIComponent(music.videoId)}&filename=${encodeURIComponent(filename)}`;
+    
+    // Create and click download link
     const element = document.createElement("a");
-    element.setAttribute("href", player.audioUrl || "");
-    element.setAttribute("download", `${music.title}-${music.artist}.mp3`);
+    element.setAttribute("href", downloadUrl);
+    element.setAttribute("download", filename);
     element.style.display = "none";
     document.body.appendChild(element);
     element.click();
@@ -261,6 +265,7 @@ export default function ListenMusic() {
         audioUrl={player.audioUrl}
         title={player.currentTitle}
         artist={player.currentArtist}
+        videoId={player.currentMusicId}
         isPlaying={player.isPlaying}
         onClose={player.stop}
         onPlayPauseChange={player.setIsPlaying}

@@ -6,12 +6,13 @@ interface FooterProps {
   audioUrl?: string;
   title?: string;
   artist?: string;
+  videoId?: string | null;
   isPlaying?: boolean;
   onClose?: () => void;
   onPlayPauseChange?: (isPlaying: boolean) => void;
 }
 
-export function Footer({ audioUrl, title, artist, isPlaying = false, onClose, onPlayPauseChange }: FooterProps = {}) {
+export function Footer({ audioUrl, title, artist, videoId, isPlaying = false, onClose, onPlayPauseChange }: FooterProps = {}) {
   return (
     <>
       {/* Audio Player at bottom */}
@@ -19,6 +20,7 @@ export function Footer({ audioUrl, title, artist, isPlaying = false, onClose, on
         audioUrl={audioUrl}
         title={title}
         artist={artist}
+        videoId={videoId}
         isPlaying={isPlaying}
         onClose={onClose}
         onPlayPauseChange={onPlayPauseChange}

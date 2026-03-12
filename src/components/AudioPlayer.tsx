@@ -7,12 +7,13 @@ interface AudioPlayerProps {
   audioUrl: string | null;
   title: string | null;
   artist: string | null;
+  videoId?: string | null;
   isPlaying?: boolean;
   onClose: () => void;
   onPlayPauseChange?: (isPlaying: boolean) => void;
 }
 
-export function AudioPlayer({ audioUrl, title, artist, isPlaying: externalIsPlaying = false, onClose, onPlayPauseChange }: AudioPlayerProps) {
+export function AudioPlayer({ audioUrl, title, artist, videoId, isPlaying: externalIsPlaying = false, onClose, onPlayPauseChange }: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -151,10 +152,16 @@ export function AudioPlayer({ audioUrl, title, artist, isPlaying: externalIsPlay
   };
 
   const handleDownload = () => {
-    if (!audioUrl) return;
+    if (!videoId) return;
+    
+    const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+    const filename = `${title || "audio"}-${artist || "unknown"}.mp3`.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const downloadUrl = `${API_BASE_URL}/listen-music/download?videoId=${encodeURIComponent(videoId)}&filename=${encodeURIComponent(filename)}`;
+    
+    // Create and click download link
     const element = document.createElement("a");
-    element.setAttribute("href", audioUrl);
-    element.setAttribute("download", `${title || "audio"}-${artist || "unknown"}.mp3`);
+    element.setAttribute("href", downloadUrl);
+    element.setAttribute("download", filename);
     element.style.display = "none";
     document.body.appendChild(element);
     element.click();

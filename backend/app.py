@@ -246,6 +246,70 @@ def stream_audio():
         return jsonify({"error": f"Streaming failed: {str(e)}"}), 500
 
 
+@app.route("/listen-music/download", methods=["GET"])
+def download_audio():
+    """Download audio file with proper headers"""
+    if not YTDLP_AVAILABLE:
+        return jsonify({"error": "Audio extraction is not available"}), 500
+    
+    video_id = request.args.get("videoId")
+    filename = request.args.get("filename", "audio.mp3")
+    
+    if not video_id:
+        return jsonify({"error": "videoId is required"}), 400
+    
+    # Validate video ID format
+    if len(video_id) != 11:
+        return jsonify({"error": "Invalid video ID"}), 400
+    
+    try:
+        youtube_url = f"https://www.youtube.com/watch?v={video_id}"
+        
+        # Extract audio in a format that browsers can play
+        ydl_opts = {
+            'format': 'bestaudio',
+            'quiet': True,
+            'no_warnings': True,
+            'extract_flat': False,
+            'socket_timeout': 30,
+            'ignoreerrors': True,
+        }
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(youtube_url, download=False)
+            audio_url = info.get('url')
+            
+            if not audio_url:
+                return jsonify({"error": "Could not extract audio URL"}), 500
+            
+            # Fetch the audio file
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            }
+            
+            response = requests.get(audio_url, headers=headers, stream=True, timeout=30)
+            response.raise_for_status()
+            
+            # Return with download headers
+            def generate():
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        yield chunk
+            
+            return generate(), 200, {
+                'Content-Type': 'audio/mpeg',
+                'Content-Disposition': f'attachment; filename="{filename}"',
+                'Content-Length': response.headers.get('content-length', ''),
+                'Accept-Ranges': 'bytes',
+                'Cache-Control': 'no-cache',
+                'Access-Control-Allow-Origin': '*',
+            }
+    
+    except Exception as e:
+        print(f"Error downloading audio: {str(e)}")
+        return jsonify({"error": f"Download failed: {str(e)}"}), 500
+
+
 @app.route("/listen-music/music-info", methods=["GET"])
 def get_music_info():
     """Get music metadata from YouTube video ID"""

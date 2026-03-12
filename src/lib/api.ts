@@ -23,16 +23,19 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 export function extractYouTubeVideoId(input: string): string | null {
   const trimmed = input.trim();
 
+  // Remove query parameters for cleaner processing
+  const baseUrl = trimmed.split('?')[0].split('#')[0];
+
   // Standard YouTube URL: https://www.youtube.com/watch?v=VIDEO_ID
-  let match = trimmed.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+  let match = baseUrl.match(/youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/);
   if (match) return match[1];
 
-  // YouTube short URL: https://youtu.be/VIDEO_ID
-  match = trimmed.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/);
+  // YouTube short URL: https://youtu.be/VIDEO_ID (handles query params)
+  match = baseUrl.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/);
   if (match) return match[1];
 
   // YouTube music URL: https://music.youtube.com/watch?v=VIDEO_ID
-  match = trimmed.match(/music\.youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/);
+  match = baseUrl.match(/music\.youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/);
   if (match) return match[1];
 
   // Standalone video ID - must be EXACTLY 11 characters (YouTube standard)
