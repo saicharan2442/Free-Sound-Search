@@ -50,8 +50,8 @@ if not os.path.exists('flask_session'):
 # Email Configuration
 SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = 587
-SMTP_USER = "ffmails500@gmail.com"
-SMTP_PASSWORD = "sius gcet dsvt edkb"
+SMTP_USER = "ffmails50@gmail.com"
+SMTP_PASSWORD = "sius edkb"
 
 # OTP Configuration
 OTP_EXPIRY_SECONDS = 300
