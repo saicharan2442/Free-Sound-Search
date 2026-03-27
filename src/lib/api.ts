@@ -48,7 +48,7 @@ export function extractYouTubeVideoId(input: string): string | null {
 }
 
 export async function searchSounds(query: string): Promise<SoundResult[]> {
-  const response = await fetch(`${API_BASE_URL}/?q=${encodeURIComponent(query)}`);
+  const response = await fetch(`${API_BASE_URL}/search?q=${encodeURIComponent(query)}`);
   if (!response.ok) {
     throw new Error(`Search failed: ${response.statusText}`);
   }

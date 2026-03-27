@@ -1,7 +1,14 @@
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify, send_file, session
 from flask_cors import CORS
+from flask_session import Session
 import requests
 from io import BytesIO
+import smtplib
+import random
+import time
+import os
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 try:
     from ytmusicapi import YTMusic
@@ -16,7 +23,40 @@ except ImportError:
     YTDLP_AVAILABLE = False
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, 
+     supports_credentials=True,
+     origins=["http://localhost:8083", "http://localhost:8082", "http://localhost:8081", "http://localhost:8080", "http://127.0.0.1:*"],
+     allow_headers=["Content-Type"],
+     expose_headers=["Set-Cookie"],
+     max_age=3600)
+
+# Session Configuration
+app.config['SESSION_TYPE'] = 'filesystem'
+app.config['SECRET_KEY'] = 'your_secret_key_change_this_to_something_secure'
+app.config['SESSION_PERMANENT'] = True  # Make sessions persistent
+app.config['PERMANENT_SESSION_LIFETIME'] = 86400 * 7  # 7 days
+app.config['SESSION_COOKIE_SECURE'] = False  # False for localhost (no HTTPS)
+app.config['SESSION_COOKIE_HTTPONLY'] = True  # Prevent JS access
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # Allow cross-origin cookies
+app.config['SESSION_COOKIE_NAME'] = 'freesound_session'
+
+Session(app)
+
+# Ensure flask_session directory exists
+if not os.path.exists('flask_session'):
+    os.makedirs('flask_session')
+    print("Created flask_session directory")
+
+# Email Configuration
+SMTP_HOST = "smtp.gmail.com"
+SMTP_PORT = 587
+SMTP_USER = "ffmails500@gmail.com"
+SMTP_PASSWORD = "sius gcet dsvt edkb"
+
+# OTP Configuration
+OTP_EXPIRY_SECONDS = 300
+OTP_RESEND_COOLDOWN = 30
+otp_store = {}
 
 # Your Freesound API Key
 API_KEY = "zFJHswHd0bdYd6wBhSN9uEK9w6DA1VQy5bPESUiD"
@@ -29,6 +69,11 @@ if YTMUSIC_AVAILABLE:
 BASE_URL = "https://freesound.org/apiv2/search/text/"
 
 @app.route("/", methods=["GET"])
+def health_check():
+    """Health check endpoint"""
+    return jsonify({"status": "ok", "message": "Backend is running"}), 200
+
+@app.route("/search", methods=["GET"])
 def search_sounds():
     """Search sounds from Freesound API - fetches results with timeout"""
     query = request.args.get("q")
@@ -363,6 +408,164 @@ def get_music_info():
     except Exception as e:
         print(f"Error getting music info: {str(e)}")
         return jsonify({"error": "Failed to get music info. Please try a valid YouTube URL."}), 500
+
+
+# ============ AUTHENTICATION ENDPOINTS ============
+
+def generate_otp():
+    """Generate a 6-digit OTP"""
+    return str(random.randint(100000, 999999))
+
+
+def send_otp_email(to_email, otp):
+    """Send OTP via email"""
+    try:
+        subject = "Your OTP Login Code"
+        body = f"""
+        <html>
+            <body style="font-family: Arial, sans-serif; background-color: #f5f5f5; padding: 20px;">
+                <div style="max-width: 500px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                    <h2 style="color: #333; text-align: center;">🔐 Secure Login</h2>
+                    <p style="color: #666; text-align: center; margin: 20px 0;">Your OTP code is:</p>
+                    <div style="text-align: center; background-color: #4CAF50; color: white; padding: 20px; border-radius: 8px; font-size: 32px; font-weight: bold; letter-spacing: 5px; margin: 20px 0;">
+                        {otp}
+                    </div>
+                    <p style="color: #999; text-align: center; font-size: 14px;">Valid for 5 minutes</p>
+                    <p style="color: #999; text-align: center; font-size: 12px; margin-top: 20px;">If you didn't request this code, you can ignore this email.</p>
+                </div>
+            </body>
+        </html>
+        """
+        
+        msg = MIMEMultipart()
+        msg["From"] = SMTP_USER
+        msg["To"] = to_email
+        msg["Subject"] = subject
+        msg.attach(MIMEText(body, "html"))
+        
+        server = smtplib.SMTP(SMTP_HOST, SMTP_PORT)
+        server.starttls()
+        server.login(SMTP_USER, SMTP_PASSWORD)
+        server.sendmail(SMTP_USER, to_email, msg.as_string())
+        server.quit()
+        
+        return True
+    except Exception as e:
+        print(f"Error sending email: {str(e)}")
+        return False
+
+
+@app.route("/auth/send-otp", methods=["POST"])
+def send_otp():
+    """Send OTP to email"""
+    try:
+        data = request.get_json()
+        email = data.get("email", "").strip()
+        
+        if not email or "@" not in email:
+            return jsonify({"success": False, "message": "Enter a valid email"}), 400
+        
+        now = time.time()
+        
+        if email in otp_store:
+            last = otp_store[email]["last_sent"]
+            if now - last < OTP_RESEND_COOLDOWN:
+                wait_time = int(OTP_RESEND_COOLDOWN - (now - last))
+                return jsonify({
+                    "success": False,
+                    "message": f"Wait {wait_time}s before requesting again"
+                }), 429
+        
+        otp = generate_otp()
+        
+        otp_store[email] = {
+            "otp": otp,
+            "expiry": now + OTP_EXPIRY_SECONDS,
+            "last_sent": now
+        }
+        
+        if send_otp_email(email, otp):
+            return jsonify({"success": True, "message": "OTP sent to your email!"})
+        else:
+            return jsonify({"success": False, "message": "Failed to send OTP. Check email configuration."}), 500
+            
+    except Exception as e:
+        print(f"Error in send_otp: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/auth/verify-otp", methods=["POST"])
+def verify_otp():
+    """Verify OTP and create session"""
+    try:
+        data = request.get_json()
+        email = data.get("email", "").strip()
+        user_otp = data.get("otp", "").strip()
+        
+        if not email or not user_otp:
+            return jsonify({"success": False, "message": "Email and OTP required"}), 400
+        
+        if email not in otp_store:
+            return jsonify({"success": False, "message": "Request OTP first"}), 400
+        
+        record = otp_store[email]
+        
+        if time.time() > record["expiry"]:
+            del otp_store[email]
+            return jsonify({"success": False, "message": "OTP expired"}), 400
+        
+        if record["otp"] != user_otp:
+            return jsonify({"success": False, "message": "Invalid OTP"}), 400
+        
+        # Success - create session
+        del otp_store[email]
+        
+        # Make session permanent and set user
+        session.permanent = True
+        session["user"] = email
+        session["login_time"] = time.time()
+        
+        print(f"\n=== SESSION CREATED ===")
+        print(f"User email: {email}")
+        print(f"Session data: {dict(session)}")
+        print(f"Session cookie: {session.get('_sa_id', 'NOT SET')}")
+        print(f"======================\n")
+        
+        return jsonify({
+            "success": True,
+            "message": "Login successful!",
+            "user": email
+        }), 200
+        
+    except Exception as e:
+        print(f"Error in verify_otp: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/auth/logout", methods=["POST"])
+def logout():
+    """Logout user"""
+    session.clear()
+    return jsonify({"success": True, "message": "Logged out successfully"})
+
+
+@app.route("/auth/status", methods=["GET"])
+def auth_status():
+    """Check if user is logged in"""
+    print(f"\n=== AUTH STATUS CHECK ===")
+    print(f"Session dict: {dict(session)}")
+    print(f"Cookies received: {request.cookies}")
+    print(f"Headers: {dict(request.headers)}")
+    
+    if "user" in session:
+        print(f"✓ User found in session: {session['user']}")
+        print(f"=======================\n")
+        return jsonify({"logged_in": True, "user": session["user"]})
+    
+    print(f"✗ No user in session")
+    print(f"=======================\n")
+    return jsonify({"logged_in": False})
+
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
